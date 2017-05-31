@@ -2,10 +2,10 @@ package WWW::HaveIBeenPwned;
 
 use Moo;
 
-use LWP::UserAgent ();
-use URL::Encode ();
-use JSON::MaybeXS ();
 use List::Util qw(any);
+use URL::Encode ();
+use LWP::UserAgent ();
+use JSON::MaybeXS ();
 use Carp qw(confess);
 
 # WWW::HaveIBeenPwned - Interface to haveibeenpwned API
@@ -13,9 +13,9 @@ use Carp qw(confess);
 our $VERSION = '0.02';
 
 has base_url => (
-    is       => "ro",
+    is       => "rw",
     #isa      => "",
-    default  => sub { "https://haveibeenpwned.com/api/" },
+    default  => sub { "https://haveibeenpwned.com/api" },
     required => 1,
 );
 
@@ -58,6 +58,11 @@ has service => (
     required => 1,
 );
 
+has _uri => (
+    is      => "rw",
+    #isa     => "",
+);
+
 has _lwp => (
     is      => "ro",
     isa     => sub {
@@ -93,7 +98,7 @@ sub pwned {
     }
 }
 
-## TODO handle empty strings in $doain, and $name in these subs
+## TODO handle empty strings in $domain, and $name in these subs
 sub breaches {
     my ($self, $domain) = @_;
 
@@ -105,6 +110,71 @@ sub breaches {
     my ($status, $message) = $self->_call_api( undef, \%parameters );
 
     return $status, JSON::MaybeXS::decode_json( $message );
+}
+
+sub _call_api_2 {
+    my ($self, $service, $parameter, $queries) = @_;
+
+    $self->_setup_auth;
+
+    $self->service( $service );
+
+    $self->_uri( $self->_build_uri( $parameter, $queries ) );
+    #print $self->_uri, "\n"; return;
+
+    $self->_lwp->agent( $self->user_agent );
+
+    my $response = $self->_lwp->get( $self->_uri );
+
+# TODO handle JSON::MaybeXS::decode_json erroring when value is empty
+    my $resp_message =
+        $response->status_line eq "200 OK"
+        ? JSON::MaybeXS::decode_json( $response->decoded_content )
+        : $response->message;
+
+    return $response->status_line, $resp_message;
+}
+
+my @query_params = qw(
+    truncateResponse
+    domain
+);
+
+sub _build_uri {
+    my ($self, $parameter, $queries) = @_;
+
+    $parameter = URL::Encode::url_encode($parameter) if $parameter;
+
+    my $query;
+    if ( ref $queries && keys %$queries ) {
+        $query .= "?" . ( join "&", map { "$_=$queries->{$_}" } grep { $queries->{$_} } @query_params );
+    }
+
+    my $uri = join "/", $self->base_url, $self->service, $parameter;
+    $uri .= $query if $query;
+
+    return $uri;
+}
+
+# TODO should accept be Accept?
+my %auth_headers = (
+    api_version => 2,
+    accept      => "application/vnd.haveibeenpwned.v2+json",
+);
+
+sub _setup_auth {
+    my ($self) = @_;
+
+    if ($self->auth eq "url") {
+        $self->base_url( $self->base_url . "/v2" )
+            unless $self->base_url =~ /v2/;
+    }
+
+    if ( any { $_ =~ /$self->auth/ } keys %auth_headers ) {
+        $self->_lwp->default_header( $self->auth => $auth_headers{ $self->auth } );
+    }
+
+    return;
 }
 
 sub breach {
