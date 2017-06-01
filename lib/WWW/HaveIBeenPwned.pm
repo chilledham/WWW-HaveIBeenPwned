@@ -19,28 +19,20 @@ has base_url => (
     required => 1,
 );
 
-has user_agent => (
-    is       => "rw",
-    isa      => sub {
-                        confess sprintf "Invalid user_agent: '%s'", $_[0]
-                        if ref $_[0] || $_[0] !~ m{\A[ -~]+\Z}i;
-                    },
-    default  => sub { "Pwnage-Checker-For-Perl" },
-    required => 1,
-);
+# service can be:
+#   breachedaccount
+#     - parameters:
+#       truncateResponse=true
+#       domain=example.com
+#   breaches
+#     - parameters:
+#       domain=example.com
+#   breach
+#   dataclasses
+#   pasteaccount
+#
 
-my @auths = qw( url api_version accept );
-has auth => (
-    is       => "rw",
-    isa      => sub {
-                        confess sprintf "Invalid auth: '%s'", $_[0]
-                        unless any { $_ =~ /\A$_[0]\Z/ } @auths;
-                    },
-    default  => sub { "url" },
-    required => 1,
-);
-
-my @services= qw(
+my @services = qw(
     breachedaccount
     breaches
     breach
@@ -55,6 +47,27 @@ has service => (
                         unless any { $_ =~ /\A$_[0]\Z/ } @services;
                    },
     default  => "breachedaccount",
+    required => 1,
+);
+
+my @auths = qw( url api_version accept Accept );
+has auth => (
+    is       => "rw",
+    isa      => sub {
+                        confess sprintf "Invalid auth: '%s'", $_[0]
+                        unless any { $_ =~ /\A$_[0]\Z/ } @auths;
+                    },
+    default  => sub { "url" },
+    required => 1,
+);
+
+has user_agent => (
+    is       => "rw",
+    isa      => sub {
+                        confess sprintf "Invalid user_agent: '%s'", $_[0]
+                        if ref $_[0] || $_[0] !~ m{\A[ -~]+\Z}i;
+                    },
+    default  => sub { "Pwnage-Checker-For-Perl" },
     required => 1,
 );
 
@@ -74,18 +87,17 @@ has _lwp => (
 
 # email  - required
 # domain - optional
+# TODO fix this, not working
 sub pwned {
     my ($self, $email, $domain) = @_;
 
-    $self->service("breachedaccount");
-
-    my %parameters = (
+    my %queries = (
         truncateResponse => "true",
     );
 
-    $parameters{domain} = lc($domain) if $domain;
+    $queries{domain} = lc($domain) if $domain;
 
-    my ($status, $message) = $self->_call_api( $email, \%parameters );
+    my ($status, $message) = $self->_call_api_2( "breachedaccount", $email, \%queries );
 
     if ($status eq "200 OK") {
         return JSON::MaybeXS::decode_json( $message );
@@ -98,18 +110,34 @@ sub pwned {
     }
 }
 
+sub breachedaccount {
+    ...;
+}
+
 ## TODO handle empty strings in $domain, and $name in these subs
 sub breaches {
     my ($self, $domain) = @_;
 
-    $self->service("breaches");
+    my %queries;
+    $queries{domain} = $domain if $domain;
 
-    my %parameters;
-    $parameters{domain} = lc($domain) if $domain;
+    return $self->_call_api_2("breaches", undef, \%queries);
+}
 
-    my ($status, $message) = $self->_call_api( undef, \%parameters );
+sub breach {
+    my ($self, $name) = @_;
 
-    return $status, JSON::MaybeXS::decode_json( $message );
+    return $self->_call_api_2("breach", $name);
+}
+
+sub dataclasses {
+    return $_[0]->_call_api_2("dataclasses");
+}
+
+sub pasteaccount {
+    my ($self, $account) = @_;
+
+    return $self->_call_api_2("pasteaccount", $account);
 }
 
 sub _call_api_2 {
@@ -120,7 +148,7 @@ sub _call_api_2 {
     $self->service( $service );
 
     $self->_uri( $self->_build_uri( $parameter, $queries ) );
-    #print $self->_uri, "\n"; return;
+    print $self->_uri, "\n"; return;
 
     $self->_lwp->agent( $self->user_agent );
 
@@ -135,31 +163,10 @@ sub _call_api_2 {
     return $response->status_line, $resp_message;
 }
 
-my @query_params = qw(
-    truncateResponse
-    domain
-);
-
-sub _build_uri {
-    my ($self, $parameter, $queries) = @_;
-
-    $parameter = URL::Encode::url_encode($parameter) if $parameter;
-
-    my $query;
-    if ( ref $queries && keys %$queries ) {
-        $query .= "?" . ( join "&", map { "$_=$queries->{$_}" } grep { $queries->{$_} } @query_params );
-    }
-
-    my $uri = join "/", $self->base_url, $self->service, $parameter;
-    $uri .= $query if $query;
-
-    return $uri;
-}
-
-# TODO should accept be Accept?
 my %auth_headers = (
     api_version => 2,
     accept      => "application/vnd.haveibeenpwned.v2+json",
+    Accept      => "application/vnd.haveibeenpwned.v2+json",
 );
 
 sub _setup_auth {
@@ -177,50 +184,30 @@ sub _setup_auth {
     return;
 }
 
-sub breach {
-    my ($self, $name) = @_;
+my @query_params = qw(
+    truncateResponse
+    domain
+);
 
-    $self->service("breach");
+sub _build_uri {
+    my ($self, $parameter, $queries) = @_;
 
-    my ($status, $message) = $self->_call_api( $name );
+    $parameter = URL::Encode::url_encode($parameter) if $parameter;
 
-    return $status, JSON::MaybeXS::decode_json( $message );
-}
+    my $query;
+    if ( ref $queries && keys %$queries ) {
+        $query .= "?" . ( join "&", map { "$_=$queries->{$_}" } grep { $queries->{$_} } @query_params );
+    }
 
-sub dataclasses {
-    my ($self) = @_;
+    my $uri = join "/", $self->base_url, $self->service;
+    $uri .= "/$parameter" if $parameter;
+    $uri .= $query if $query;
 
-    $self->service("dataclasses");
-
-    my ($status, $dataclasses) = $self->_call_api();
-
-    return $status, JSON::MaybeXS::decode_json( $dataclasses );
-}
-
-sub pasteaccount {
-    my ($self, $email) = @_;
-
-    $self->service("pasteaccount");
-
-    my ($status, $message) = $self->_call_api( $email );
-
-    return $status, JSON::MaybeXS::decode_json( $message );
+    return $uri;
 }
 
 sub _call_api {
     my ($self, $method, $parameters) = @_;
-    # service can be:
-    #   breachedaccount
-    #     - parameters:
-    #       truncateResponse=true
-    #       domain=example.com
-    #   breaches
-    #     - parameters:
-    #       domain=example.com
-    #   breach
-    #   dataclasses
-    #   pasteaccount
-    #
 
     my $uri = $self->base_url;
 
