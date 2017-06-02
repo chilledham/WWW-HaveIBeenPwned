@@ -71,9 +71,10 @@ for my $auth (@auths) {
 # auths not supported. not exhaustive list.
 my @not_auths = qw(
     kneeprint
-    eyescent
-    radiocarbondating
     haircount
+    radiocarbondating
+    ringcounting
+    eyescent
 );
 
 for my $nein_auth (@not_auths) {
