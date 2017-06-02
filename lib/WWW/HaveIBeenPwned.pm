@@ -71,7 +71,7 @@ has user_agent => (
     required => 1,
 );
 
-has _uri => (
+has uri => (
     is      => "rw",
     #isa     => "",
 );
@@ -85,22 +85,30 @@ has _lwp => (
     default => sub { LWP::UserAgent->new(); },
 );
 
+has _query_params => (
+    is      => "ro",
+    default => sub { [qw(truncateResponse domain)] },
+);
+
+sub breachedaccount {
+    my ($self, $account, $params) = @_;
+
+    my %queries = $self->_build_query_params( $params );
+
+    return $self->_call_api_2( "breachedaccount", $account, \%queries );
+}
+
 # email  - required
 # domain - optional
-# TODO fix this, not working
 sub pwned {
-    my ($self, $email, $domain) = @_;
+    my ($self, $account, $params) = @_;
 
-    my %queries = (
-        truncateResponse => "true",
-    );
+    $params->{truncateResponse} = "true";
 
-    $queries{domain} = lc($domain) if $domain;
-
-    my ($status, $message) = $self->_call_api_2( "breachedaccount", $email, \%queries );
+    my ($status, $message) = $self->breachedaccount( $account, $params );
 
     if ($status eq "200 OK") {
-        return JSON::MaybeXS::decode_json( $message );
+        return $message;
     }
     elsif ($status eq "404 Not Found") {
         return;
@@ -110,16 +118,11 @@ sub pwned {
     }
 }
 
-sub breachedaccount {
-    ...;
-}
-
 ## TODO handle empty strings in $domain, and $name in these subs
 sub breaches {
-    my ($self, $domain) = @_;
+    my ($self, $params) = @_;
 
-    my %queries;
-    $queries{domain} = $domain if $domain;
+    my %queries = $self->_build_query_params( $params );
 
     return $self->_call_api_2("breaches", undef, \%queries);
 }
@@ -143,16 +146,16 @@ sub pasteaccount {
 sub _call_api_2 {
     my ($self, $service, $parameter, $queries) = @_;
 
-    $self->_setup_auth;
+    $self->_auth;
 
     $self->service( $service );
 
-    $self->_uri( $self->_build_uri( $parameter, $queries ) );
-    print $self->_uri, "\n"; return;
+    $self->uri( $self->_build_uri( $parameter, $queries ) );
+#    print $self->uri, "\n"; return;
 
     $self->_lwp->agent( $self->user_agent );
 
-    my $response = $self->_lwp->get( $self->_uri );
+    my $response = $self->_lwp->get( $self->uri );
 
 # TODO handle JSON::MaybeXS::decode_json erroring when value is empty
     my $resp_message =
@@ -169,7 +172,7 @@ my %auth_headers = (
     Accept      => "application/vnd.haveibeenpwned.v2+json",
 );
 
-sub _setup_auth {
+sub _auth {
     my ($self) = @_;
 
     if ($self->auth eq "url") {
@@ -184,11 +187,6 @@ sub _setup_auth {
     return;
 }
 
-my @query_params = qw(
-    truncateResponse
-    domain
-);
-
 sub _build_uri {
     my ($self, $parameter, $queries) = @_;
 
@@ -196,7 +194,7 @@ sub _build_uri {
 
     my $query;
     if ( ref $queries && keys %$queries ) {
-        $query .= "?" . ( join "&", map { "$_=$queries->{$_}" } grep { $queries->{$_} } @query_params );
+        $query .= "?" . ( join "&", map { "$_=$queries->{$_}" } grep { $queries->{$_} } @{ $self->_query_params } );
     }
 
     my $uri = join "/", $self->base_url, $self->service;
@@ -206,40 +204,15 @@ sub _build_uri {
     return $uri;
 }
 
-sub _call_api {
-    my ($self, $method, $parameters) = @_;
+sub _build_query_params {
+    my ($self, $params) = @_;
 
-    my $uri = $self->base_url;
+    my %query_params =
+        map { $_ => $params->{$_} }
+        grep { $params->{$_} }
+        @{ $self->_query_params };
 
-    # handle version specifier in URL
-    $uri .= "v2/" if $self->auth eq "url";
-    $uri .= $self->service . "/";
-
-    $uri .= URL::Encode::url_encode($method) if $method;
-
-    if (ref $parameters && keys %$parameters) {
-        $uri .= "?" . ( join "&", map { "$_=$parameters->{$_}" } keys %$parameters );
-    }
-
-    # handle version specifier in headers (api-version or Accept)
-    unless ( $self->auth eq "url" ) {
-        $self->_lwp->default_header(
-            $self->auth eq "api_version"
-                ? ($self->auth => 2)
-                : ($self->auth => "application/vnd.haveibeenpwned.v2+json")
-        );
-    }
-
-    $self->_lwp->agent( $self->user_agent );
-
-    my $response = $self->_lwp->get( $uri );
-
-    my $resp_message =
-        $response->status_line eq "200 OK"
-        ? $response->decoded_content
-        : $response->message;
-
-    return $response->status_line, $resp_message;
+    return %query_params;
 }
 
 =head1 AUTHOR
