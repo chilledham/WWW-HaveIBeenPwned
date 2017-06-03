@@ -3,14 +3,12 @@ package WWW::HaveIBeenPwned;
 use Moo;
 
 use List::Util qw(any);
-use URL::Encode ();
+use URI::Escape ();
 use LWP::UserAgent ();
 use JSON::MaybeXS ();
 use Carp qw(confess);
 
-# WWW::HaveIBeenPwned - Interface to haveibeenpwned API
-
-our $VERSION = '0.02';
+$WWW::HaveIBeenPwned::VERSION = '0.02';
 
 has base_url => (
     is       => "rw",
@@ -190,7 +188,7 @@ sub _auth {
 sub _build_uri {
     my ($self, $parameter, $queries) = @_;
 
-    $parameter = URL::Encode::url_encode($parameter) if $parameter;
+    $parameter = URI::Escape::uri_escape($parameter) if $parameter;
 
     my $query;
     if ( ref $queries && keys %$queries ) {
@@ -215,6 +213,57 @@ sub _build_query_params {
     return %query_params;
 }
 
+=head1 NAME
+
+WWW::HaveIBeenPwned - Interface to haveibeenpwned API
+
+=head1 VERSION
+
+ 0.02
+
+=head1 SYNOPSIS
+
+ use WWW::HaveIBeenPwned;
+ $pwned = WWW::HaveIBeenPwned->new();
+ if ( my $sites = $pwned->pwned( $account ) ) {
+     print "$account has been pwned\n";
+     print "\t$_->{Name}\n" for @$sites;
+ }
+
+=head1 INSTALLATION
+
+Something about Net::SSLeay and how irritating it is to install
+
+=head1 METHODS
+
+=over 4
+
+=item new
+
+=item pwned
+
+=item breacheaccount
+
+=item breaches
+
+=item breach
+
+=item dataclass
+
+=item pasteaccount
+
+=back
+
+=head1 ATTRIBUTIONS
+
+Troy Hunt for creating and maintaingin L<https://haveibeenpwned.com>
+
+Have I Been Pwned? is the source of all data; this is simply a Perl interface.
+
+Use of this data is licensed through Creative Commons Attribution 4.0.
+
+L<https://creativecommons.org/licenses/by/4.0/>
+
 =head1 AUTHOR
 
 collin seaton, C<< <cseaton at cpan.org> >>
@@ -228,7 +277,6 @@ under the terms of either: the GNU General Public License as published
 by the Free Software Foundation; or the Artistic License.
 
 See L<http://dev.perl.org/licenses/> for more information.
-
 
 =cut
 
