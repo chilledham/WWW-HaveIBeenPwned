@@ -41,7 +41,7 @@ my @services = qw(
 has service => (
     is       => "rw",
     isa     => sub {
-                        confess sprintf "Invalid method: '%s'", $_[0]
+                        confess sprintf "Invalid service: '%s'", $_[0]
                         unless any { $_ =~ /\A$_[0]\Z/ } @services;
                    },
     default  => "breachedaccount",
@@ -91,9 +91,11 @@ has _query_params => (
 sub breachedaccount {
     my ($self, $account, $params) = @_;
 
+    confess "'\$account' is required" unless $account;
+
     my %queries = $self->_build_query_params( $params );
 
-    return $self->_call_api_2( "breachedaccount", $account, \%queries );
+    return $self->_call_api( "breachedaccount", $account, \%queries );
 }
 
 # email  - required
@@ -116,32 +118,35 @@ sub pwned {
     }
 }
 
-## TODO handle empty strings in $domain, and $name in these subs
 sub breaches {
     my ($self, $params) = @_;
 
     my %queries = $self->_build_query_params( $params );
 
-    return $self->_call_api_2("breaches", undef, \%queries);
+    return $self->_call_api("breaches", undef, \%queries);
 }
 
 sub breach {
     my ($self, $name) = @_;
 
-    return $self->_call_api_2("breach", $name);
+    confess "'\$name' is required" unless $name;
+
+    return $self->_call_api("breach", $name);
 }
 
 sub dataclasses {
-    return $_[0]->_call_api_2("dataclasses");
+    return $_[0]->_call_api("dataclasses");
 }
 
 sub pasteaccount {
     my ($self, $account) = @_;
 
-    return $self->_call_api_2("pasteaccount", $account);
+    confess "'\$account' is required" unless $account;
+
+    return $self->_call_api("pasteaccount", $account);
 }
 
-sub _call_api_2 {
+sub _call_api {
     my ($self, $service, $parameter, $queries) = @_;
 
     $self->_auth;
@@ -155,7 +160,6 @@ sub _call_api_2 {
 
     my $response = $self->_lwp->get( $self->uri );
 
-# TODO handle JSON::MaybeXS::decode_json erroring when value is empty
     my $resp_message =
         $response->status_line eq "200 OK"
         ? JSON::MaybeXS::decode_json( $response->decoded_content )
@@ -232,7 +236,7 @@ WWW::HaveIBeenPwned - Interface to haveibeenpwned API
 
 =head1 INSTALLATION
 
-Something about Net::SSLeay and how irritating it is to install
+Something about LWP::Protocol::https and how irritating it is to install
 
 =head1 METHODS
 
@@ -254,29 +258,32 @@ Something about Net::SSLeay and how irritating it is to install
 
 =back
 
-=head1 ATTRIBUTIONS
+=head1 ATTRIBUTION
 
-Troy Hunt for creating and maintaingin L<https://haveibeenpwned.com>
+Troy Hunt
 
-Have I Been Pwned? is the source of all data; this is simply a Perl interface.
+';--have i been pwned?
 
-Use of this data is licensed through Creative Commons Attribution 4.0.
+L<https://haveibeenpwned.com>
 
-L<https://creativecommons.org/licenses/by/4.0/>
+';--have i been pwned? is the source of all data; this is simply a Perl
+interface to that data.
+
+';--have i been pwned? is licensed under Creative Commons Attribution 4.0
+International Licence.
+
+CC BY 4.0 L<https://creativecommons.org/licenses/by/4.0/>
+
+=head1 LICENSE AND COPYRIGHT
+
+This software is licenced under Creative Commons Attribution 4.0
+CC BY 4.0 L<https://creativecommons.org/licenses/by/4.0/>
+
+Copyright 2017 collin seaton.
 
 =head1 AUTHOR
 
 collin seaton, C<< <cseaton at cpan.org> >>
-
-=head1 LICENSE AND COPYRIGHT
-
-Copyright 2017 collin seaton.
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of either: the GNU General Public License as published
-by the Free Software Foundation; or the Artistic License.
-
-See L<http://dev.perl.org/licenses/> for more information.
 
 =cut
 
