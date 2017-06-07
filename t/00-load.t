@@ -4,7 +4,7 @@ use 5.006;
 use strict;
 use warnings;
 
-use Test::More;
+use Test::More tests => 33;;
 
 BEGIN {
     use FindBin;
@@ -126,5 +126,5 @@ my %niet_queries = (
 %params = $pwned->_build_query_params( \%niet_queries );
 is_deeply( \%queries, \%params, "Query parameter manipulation still sane" );
 
-done_testing();
+#done_testing();
 
