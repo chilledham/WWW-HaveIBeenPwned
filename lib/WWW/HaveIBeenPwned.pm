@@ -177,12 +177,14 @@ my %auth_headers = (
 sub _auth {
     my ($self) = @_;
 
-    if ($self->auth eq "url") {
-        $self->base_url( $self->base_url . "/v2" )
-            unless $self->base_url =~ /v2/;
+    $self->auth("url") unless $self->auth;
+
+    if ($self->auth eq "url" and not $self->base_url =~ /v2/ ) {
+        $self->base_url( $self->base_url . "/v2" );
     }
 
-    if ( any { $_ =~ /$self->auth/ } keys %auth_headers ) {
+    if ( exists $auth_headers{ $self->auth } ) {
+        $self->auth("Accept") if $self->auth eq "accept";
         $self->_lwp->default_header( $self->auth => $auth_headers{ $self->auth } );
     }
 
